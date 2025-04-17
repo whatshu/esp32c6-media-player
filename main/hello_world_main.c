@@ -60,17 +60,6 @@ led_strip_handle_t configure_led(void)
 
     ESP_ERROR_CHECK(led_strip_new_rmt_device(&strip_config, &rmt_config, &led_strip));
 
-    // /* LED strip initialization with the GPIO and pixels number*/
-    // led_strip_config_t strip_config = {
-    //     .strip_gpio_num = LED_STRIP_GPIO_PIN,
-    //     .max_leds = LED_STRIP_LED_COUNT,
-    // };
-    // led_strip_rmt_config_t rmt_config = {
-    //     .resolution_hz = LED_STRIP_RMT_RES_HZ,
-    //     .flags.with_dma = LED_STRIP_USE_DMA,
-    // };
-    // ESP_ERROR_CHECK(led_strip_new_rmt_device(&strip_config, &rmt_config, &led_strip));
-
     led_strip_clear(led_strip);
 
     ESP_LOGI(TAG, "Created LED strip object with RMT backend");
@@ -79,11 +68,34 @@ led_strip_handle_t configure_led(void)
 
 void app_main(void)
 {
+    uint32_t led_state = 0;
     led_strip_handle_t led_strip = configure_led();
 
     while (1) {
+        switch (led_state) {
+        case 0:
+            ESP_LOGI(TAG, "RED on");
+            led_strip_set_pixel(led_strip, 0, 50, 0, 0); // Set the first pixel to red
+            break;
+        
+        case 1:
+            ESP_LOGI(TAG, "GREEN on");
+            led_strip_set_pixel(led_strip, 0, 0, 50, 0); // Set the first pixel to red
+            break;
+
+        case 2:
+            ESP_LOGI(TAG, "BLUE on");
+            led_strip_set_pixel(led_strip, 0, 0, 0, 50); // Set the first pixel to red
+            break;
+
+        default:
+            break;
+        }
+        led_state = (led_state + 1) % 3;
+
         ESP_LOGI(TAG, "program running, current time: %02.2f\n", esp_timer_get_time() / 1000000.0);
 
+        led_strip_refresh(led_strip);
         vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
 }
