@@ -12,41 +12,78 @@
 #include "esp_chip_info.h"
 #include "esp_flash.h"
 #include "esp_system.h"
+#include "esp_timer.h"
+#include "esp_log.h"
+#include "esp_err.h"
+
+#include "led_strip.h"
+
+#define LED_STRIP_USE_DMA false
+
+// Numbers of the LED in the strip
+#define LED_STRIP_LED_COUNT 1
+#define LED_STRIP_MEMORY_BLOCK_WORDS 0 // let the driver choose a proper memory block size automatically
+
+// GPIO assignment
+#define LED_STRIP_GPIO_PIN  8
+
+// 10MHz resolution, 1 tick = 0.1us (led strip needs a high resolution)
+#define LED_STRIP_RMT_RES_HZ  (10 * 1000 * 1000)
+
+static const char *TAG = "main";
+
+led_strip_handle_t configure_led(void)
+{
+    // LED Strip object handle
+    led_strip_handle_t led_strip;
+
+    // LED strip general initialization, according to your led board design
+    led_strip_config_t strip_config = {
+        .strip_gpio_num = LED_STRIP_GPIO_PIN, // The GPIO that connected to the LED strip's data line
+        .max_leds = LED_STRIP_LED_COUNT,      // The number of LEDs in the strip,
+        .led_model = LED_MODEL_WS2812,        // LED strip model
+        .color_component_format = LED_STRIP_COLOR_COMPONENT_FMT_RGB, // The color order of the strip: GRB
+        .flags = {
+            .invert_out = false, // don't invert the output signal
+        }
+    };
+
+    // LED strip backend configuration: RMT
+    led_strip_rmt_config_t rmt_config = {
+        .clk_src = RMT_CLK_SRC_DEFAULT,        // different clock source can lead to different power consumption
+        .resolution_hz = LED_STRIP_RMT_RES_HZ, // RMT counter clock frequency
+        .mem_block_symbols = LED_STRIP_MEMORY_BLOCK_WORDS, // the memory block size used by the RMT channel
+        .flags = {
+            .with_dma = LED_STRIP_USE_DMA,     // Using DMA can improve performance when driving more LEDs
+        }
+    };
+
+    ESP_ERROR_CHECK(led_strip_new_rmt_device(&strip_config, &rmt_config, &led_strip));
+
+    // /* LED strip initialization with the GPIO and pixels number*/
+    // led_strip_config_t strip_config = {
+    //     .strip_gpio_num = LED_STRIP_GPIO_PIN,
+    //     .max_leds = LED_STRIP_LED_COUNT,
+    // };
+    // led_strip_rmt_config_t rmt_config = {
+    //     .resolution_hz = LED_STRIP_RMT_RES_HZ,
+    //     .flags.with_dma = LED_STRIP_USE_DMA,
+    // };
+    // ESP_ERROR_CHECK(led_strip_new_rmt_device(&strip_config, &rmt_config, &led_strip));
+
+    led_strip_clear(led_strip);
+
+    ESP_LOGI(TAG, "Created LED strip object with RMT backend");
+    return led_strip;
+}
 
 void app_main(void)
 {
-    printf("Hello world!\n");
+    led_strip_handle_t led_strip = configure_led();
 
-    /* Print chip information */
-    esp_chip_info_t chip_info;
-    uint32_t flash_size;
-    esp_chip_info(&chip_info);
-    printf("This is %s chip with %d CPU core(s), %s%s%s%s, ",
-           CONFIG_IDF_TARGET,
-           chip_info.cores,
-           (chip_info.features & CHIP_FEATURE_WIFI_BGN) ? "WiFi/" : "",
-           (chip_info.features & CHIP_FEATURE_BT) ? "BT" : "",
-           (chip_info.features & CHIP_FEATURE_BLE) ? "BLE" : "",
-           (chip_info.features & CHIP_FEATURE_IEEE802154) ? ", 802.15.4 (Zigbee/Thread)" : "");
+    while (1) {
+        ESP_LOGI(TAG, "program running, current time: %02.2f\n", esp_timer_get_time() / 1000000.0);
 
-    unsigned major_rev = chip_info.revision / 100;
-    unsigned minor_rev = chip_info.revision % 100;
-    printf("silicon revision v%d.%d, ", major_rev, minor_rev);
-    if(esp_flash_get_size(NULL, &flash_size) != ESP_OK) {
-        printf("Get flash size failed");
-        return;
-    }
-
-    printf("%" PRIu32 "MB %s flash\n", flash_size / (uint32_t)(1024 * 1024),
-           (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "embedded" : "external");
-
-    printf("Minimum free heap size: %" PRIu32 " bytes\n", esp_get_minimum_free_heap_size());
-
-    for (int i = 10; i >= 0; i--) {
-        printf("Restarting in %d seconds...\n", i);
         vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
-    printf("Restarting now.\n");
-    fflush(stdout);
-    esp_restart();
 }
